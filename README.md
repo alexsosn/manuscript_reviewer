@@ -22,6 +22,10 @@ Run `npm test` and `python -m unittest discover -s tests -p 'test_*.py'` after f
 
 Local Electron editor for the BL Add MS 14,470 manuscript. Open the latest build, `dist/v0.4/mac/Syriac validator.app` on this Intel Mac. The packaged app finds this manuscript workspace automatically. Folders / settings lets you choose another workspace, PAGE input folder, image folder and output folder.
 
+## Manuscript XML repository
+
+The manuscript PAGE files and edit history are maintained separately in [alexsosn/BL-Add-MS-14-470](https://github.com/alexsosn/BL-Add-MS-14-470). On this Mac, the parent `HTR_WS_2026` workspace is that repository checkout; this app folder remains its separate code repository. Save XML normally, then run the workspace’s **Snapshot XML edits.command** to commit and push changes. This snapshots local files; Transkribus upload remains a separate action.
+
 ## Editing
 
 - The page list opens native Transkribus PAGE XML. The default input is `layout_corrected/page`, with the newer `layout_v2/page` samples taking precedence where present. Opening a page does not modify it.
