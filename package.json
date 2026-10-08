@@ -1,0 +1,78 @@
+{
+  "name": "syriac-validator",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "Local PAGE XML layout and Syriac transcription editor with Peshitta alignment",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "preview": "node preview.js",
+    "test": "node --test tests/*.test.js",
+    "test:python": "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "build": "electron-builder --dir --mac"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "org.syriac.validator",
+    "productName": "Syriac validator",
+    "files": [
+      "main.js",
+      "bridge.js",
+      "preload.cjs",
+      "renderer/**",
+      "backend.py",
+      "pagexml.py",
+      "corpus.py",
+      "transkribus.py",
+      "saved_login.py",
+      "morphology.py",
+      "paleography.py"
+    ],
+    "extraResources": [
+      {
+        "from": "data",
+        "to": "data",
+        "filter": [
+          "pagecontent-2013.xsd",
+          "syrnt-source/plain/**",
+          "syrnt-source/LICENSE",
+          "sycgloss-source/lexeme.json",
+          "sycgloss-source/LICENSE",
+          "sycgloss-source/README.md",
+          "provenance.json",
+          "syrnt-source/tf/0.1/**"
+        ]
+      },
+      {
+        "from": ".",
+        "to": ".",
+        "filter": [
+          "backend.py",
+          "pagexml.py",
+          "corpus.py",
+          "transkribus.py",
+          "saved_login.py",
+          "morphology.py",
+          "paleography.py"
+        ]
+      }
+    ],
+    "mac": {
+      "identity": null,
+      "target": "dir"
+    },
+    "directories": {
+      "output": "dist"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexsosn/manuscript_reviewer.git"
+  },
+  "license": "MIT",
+  "author": "Oleksandr (Alex) Sosnovshchenko"
+}

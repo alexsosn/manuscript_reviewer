@@ -1,0 +1,45 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2013-07-15">
+  <Metadata>
+    <Creator>Synthetic editor test fixture</Creator>
+    <Created>2026-10-08T00:00:00Z</Created>
+    <LastChange>2026-10-08T00:00:00Z</LastChange>
+    <TranskribusMetadata pageNr="84" pageId="100" docId="200" tsid="1" status="IN_PROGRESS"/>
+  </Metadata>
+  <Page imageFilename="synthetic.png" imageWidth="1089" imageHeight="1500">
+    <TextRegion id="region_0" readingDirection="right-to-left" custom="readingOrder {index:0;}">
+      <Coords points="550,100 900,100 900,400 550,400"/>
+      <TextLine id="line_0_0" custom="readingOrder {index:0;}">
+        <Coords points="550,150 900,150 900,175 550,175"/>
+        <Baseline points="550,170 900,170"/>
+        <TextEquiv>
+          <Unicode>ܐܠܗܐ</Unicode>
+        </TextEquiv>
+      </TextLine>
+      <TextLine id="line_0_1" custom="readingOrder {index:1;}">
+        <Coords points="550,200 900,200 900,225 550,225"/>
+        <Baseline points="550,220 900,220"/>
+        <TextEquiv>
+          <Unicode>ܐܠܗܐ</Unicode>
+        </TextEquiv>
+      </TextLine>
+    </TextRegion>
+    <TextRegion id="region_1" readingDirection="right-to-left" custom="readingOrder {index:1;}">
+      <Coords points="100,100 450,100 450,400 100,400"/>
+      <TextLine id="line_1_0" custom="readingOrder {index:0;}">
+        <Coords points="100,150 450,150 450,175 100,175"/>
+        <Baseline points="100,170 450,170"/>
+        <TextEquiv>
+          <Unicode>ܐܠܗܐ</Unicode>
+        </TextEquiv>
+      </TextLine>
+      <TextLine id="line_1_1" custom="readingOrder {index:1;}">
+        <Coords points="100,200 450,200 450,225 100,225"/>
+        <Baseline points="100,220 450,220"/>
+        <TextEquiv>
+          <Unicode>ܐܠܗܐ</Unicode>
+        </TextEquiv>
+      </TextLine>
+    </TextRegion>
+  </Page>
+</PcGts>

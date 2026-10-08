@@ -218,3 +218,25 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Electron dependencies and builds
+node_modules/
+.DS_Store
+/interface-*.png
+/vertices-*.png
+/paleography-*.png
+
+# Downloaded upstream datasets (see tools/fetch_data.py)
+/data/syrnt-source/
+/data/sycgloss-source/
+
+# Manuscript workspace, edits and connection state
+/local_edits/
+/readable_images/
+/layout_*/
+/page/
+/Preliminary_Setup__*/
+*.session
+
+# Ignore the local dependency symlink as well as a directory
+/node_modules

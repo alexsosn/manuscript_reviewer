@@ -1,0 +1,17 @@
+{
+  "peshitta": {
+    "url": "https://github.com/etcbc/syrnt",
+    "commit": "dae3eb6ff62b9b272fb503646796c25d248175ce",
+    "source": "plain/0.1, 27 books, 7957 verses",
+    "license": "MIT; see syrnt-source/LICENSE",
+    "attribution": "ETCBC; source repository credits George Kiraz and Stephen Bennett for the SEDRA export.",
+    "morphology": "tf/0.1, 109640 word analyses; exact normalized word-by-word correspondence with the plain reference verified at load"
+  },
+  "lexicon": {
+    "url": "https://github.com/celkhaissi/sycgloss/blob/master/lexeme.json",
+    "commit": "d8402c800176a148eefa8d95cb9d7ac1f8018111",
+    "attribution": "Cel Kh\u00e2issi, sycgloss; SEDRA lexeme identifiers and glosses",
+    "license_note": "Repository LICENSE is CC0, while README states CC BY 4.0. Both notices are included; attribution is retained."
+  },
+  "retrieved": "2026-10-07"
+}

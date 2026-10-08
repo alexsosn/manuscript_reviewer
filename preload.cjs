@@ -1,0 +1,2 @@
+const {contextBridge,ipcRenderer}=require('electron');
+contextBridge.exposeInMainWorld('syriac',{request:(command,args={})=>ipcRenderer.invoke('request',command,args),chooseFolder:kind=>ipcRenderer.invoke('chooseFolder',kind),image:(mode,name)=>'syriac-image://'+mode+'/'+encodeURIComponent(name),onClose:callback=>ipcRenderer.on('prepare-close',async()=>{try{await callback();ipcRenderer.send('close-ready')}catch(error){ipcRenderer.send('close-failed',error.message)}}),desktop:true});
