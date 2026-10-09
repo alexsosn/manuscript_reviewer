@@ -1,7 +1,7 @@
 import unittest,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from reference_review import differences,escape
+from reference_review import differences,escape,reference_tag
 class ReferenceReviewTests(unittest.TestCase):
  def diff(self,a,b):return differences(a,{'reference':b,'address':'Matthew 3:1'})
  def test_line_breaks_and_marks_are_not_differences(self):
@@ -20,3 +20,20 @@ class ReferenceReviewTests(unittest.TestCase):
  def test_offsets_use_original_utf16_and_css_escape(self):
   result=self.diff('🙂 ܐܒ','🙂 ܐܓ');self.assertEqual(result[0]['offset'],3);self.assertEqual(result[0]['length'],2)
   self.assertEqual(escape('a:b;c\nd'),r'a\u003ab\u003bc\u000ad')
+
+class CommentCompatibilityTests(unittest.TestCase):
+ def test_text_uses_native_alternative_and_reason_fields(self):
+  tag=reference_tag(3,2,'Reference spelling: ܐܓ\nPassage: Matthew 3:1')
+  self.assertIn('unclear {',tag);self.assertIn('alternative:ܐܓ;',tag)
+  self.assertIn(' | Passage',tag);self.assertIn(r'Matthew 3\u003a1',tag)
+ def test_repair_preserves_existing_tags_and_is_idempotent(self):
+  from fix_reference_comments import repair
+  from pagexml import parse,N
+  from pathlib import Path
+  raw=(Path(__file__).parent/'fixtures/synthetic.xml').read_bytes();root=parse(raw)
+  line=root.find('.//p:TextLine',N);original=line.get('custom');note='Reference spelling: ܐܓ\nPassage: Matthew 3:1'
+  line.set('custom',original+' '+f'comment {{offset:0; length:2; comment:{escape(note)};}}')
+  from lxml import etree as E
+  fixed,count=repair(E.tostring(root));self.assertEqual(count,1);custom=parse(fixed).find('.//p:TextLine',N).get('custom')
+  self.assertTrue(custom.startswith(original));self.assertIn('alternative:ܐܓ;',custom)
+  again,_=repair(fixed);self.assertEqual(fixed,again)

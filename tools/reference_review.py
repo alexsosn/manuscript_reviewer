@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Page-local SyrNT review comments. Remote writes are restricted to pages 3/4."""
+"""Page-local SyrNT spelling review annotations. Remote writes are restricted to pages 3/4."""
 import sys,json,re,hashlib,unicodedata
 from pathlib import Path
 from difflib import SequenceMatcher
@@ -12,11 +12,15 @@ from transkribus import Transkribus
 from lxml import etree as E
 APP=Path(__file__).resolve().parents[1]
 COLL=2536248;DOC=19244795;PAGES=(3,4)
-MARKER='SyrNT review'
 
 def escape(value):
  return ''.join('\\u%04x'%ord(c) if c in ':;{}\\\n\r\t' else c for c in value)
 def utf16(text):return len(text.encode('utf-16-le'))//2
+
+def reference_tag(offset,length,note):
+ spelling,passage=note.split("\nPassage: ",1)
+ spelling=spelling.removeprefix("Reference spelling: ")
+ return f"unclear {{offset:{offset}; length:{length}; alternative:{escape(spelling)}; reason:{escape('SyrNT reference | Passage: '+passage)};}}"
 
 def word_spans(text):
  return [(m.start(),m.end()) for m in re.finditer(r'\S+',text)]
@@ -78,7 +82,7 @@ def annotate(raw,alignment,corpus):
    a,b=max(start,item['start']),min(end,item['end'])
    if a>=b:continue
    text=line.findtext('p:TextEquiv/p:Unicode','',N);offset=utf16(ocr[start:a]);length=utf16(ocr[a:b]);custom=line.get('custom','')
-   tag=f"comment {{offset:{offset}; length:{length}; comment:{escape(item['comment'])};}}"
+   tag=reference_tag(offset,length,item['comment'])
    if tag not in custom:line.set('custom',(custom+' '+tag).strip())
    report.append({'lineId':line.get('id'),'ocr':ocr[a:b],**item,'offset':offset,'length':length})
  old=parse(raw);clean=deepcopy(tree)
