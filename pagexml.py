@@ -7,6 +7,27 @@ from lxml import etree as E
 NS='http://schema.primaresearch.org/PAGE/gts/pagecontent/2013-07-15';N={'p':NS}
 def tag(name):return '{'+NS+'}'+name
 def parse(raw):return E.fromstring(raw,E.XMLParser(resolve_entities=False,no_network=True,remove_blank_text=False))
+def normalize_custom_attributes(raw):
+ """Keep tag values intact; the web editor rejects whitespace after the last }."""
+ root=parse(raw);changed=False
+ for el in root.iter():
+  value=el.get('custom')
+  if value is not None and value!=value.strip():el.set('custom',value.strip());changed=True
+ return E.tostring(root,encoding='UTF-8',xml_declaration=True) if changed else raw
+
+def validate_web_custom(raw):
+ """Check custom blocks with the web editor's split-based grammar before writing."""
+ for el in parse(raw).iter():
+  value=el.get('custom','')
+  if value!=value.strip():raise ValueError(f"Transkribus web editor cannot read trailing custom-tag whitespace on {el.get('id',el.tag)}. Prepare a fresh upload plan.")
+  if value and not value.endswith('}'):raise ValueError('Incomplete Transkribus custom-tag block')
+  for block in value.split('}'):
+   if not block:continue
+   parts=block.split('{')
+   if len(parts)!=2 or not parts[0].strip():raise ValueError('Malformed Transkribus custom-tag block')
+   for rule in parts[1].split(';'):
+    if rule and (':' not in rule or not rule.split(':',1)[0].strip()):raise ValueError('Malformed Transkribus custom-tag property')
+
 def points(el,kind='Coords'):
  child=el.find('p:'+kind,N)
  return [[int(x) for x in s.split(',')] for s in child.get('points','').split()] if child is not None else []
@@ -30,7 +51,7 @@ def setpoints(el,kind,pts,w,h):
  c.set('points',value);return True
 def order(el,i):
  custom=el.get('custom','');without=re.sub(r'readingOrder\s*\{[^}]*\}\s*','',custom)
- el.set('custom',f'readingOrder {{index:{i};}} '+without)
+ el.set('custom',(f'readingOrder {{index:{i};}} '+without).strip())
 def update(raw,data,schema_path=None):
  root=parse(raw);page=root.find('p:Page',N);w,h=int(page.get('imageWidth')),int(page.get('imageHeight'))
  meta=root.find('.//p:TranskribusMetadata',N)
@@ -86,10 +107,10 @@ def update(raw,data,schema_path=None):
   validation=deepcopy(root)
   for m in validation.findall('.//p:TranskribusMetadata',N):m.getparent().remove(m)
   E.XMLSchema(E.parse(str(schema_path))).assertValid(validation)
- return E.tostring(root,encoding='UTF-8',xml_declaration=True)
+ return normalize_custom_attributes(E.tostring(root,encoding='UTF-8',xml_declaration=True))
 def page_signature(raw):
  root=parse(raw);page=root.find('p:Page',N)
- def signature(x):return (x.tag,tuple(sorted(x.attrib.items())),x.text if E.QName(x).localname in ('Unicode','PlainText') else (x.text or '').strip(),tuple(signature(c) for c in x))
+ def signature(x):return (x.tag,tuple(sorted((k,v.strip() if k=='custom' else v) for k,v in x.attrib.items())),x.text if E.QName(x).localname in ('Unicode','PlainText') else (x.text or '').strip(),tuple(signature(c) for c in x))
  return signature(page)
 
 def server_metadata(raw,info):

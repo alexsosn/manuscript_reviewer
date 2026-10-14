@@ -95,3 +95,10 @@ class PublishingTests(unittest.TestCase):
   state=self.p.status(plan['id']);state['phase']='running';self.p.write(self.p.plan_folder(plan['id'])/'state.json',state)
   (self.p.folder/'active.lock').write_text(json.dumps({'pid':99999999,'id':plan['id']}))
   self.assertFalse(self.b.handle({'command':'publishStatus','args':{'id':plan['id']}})['active'])
+
+ def test_prepared_plan_repairs_legacy_custom_before_freezing(self):
+  from pagexml import parse,N,validate_web_custom
+  from lxml import etree as E
+  root=parse(self.raw);root.find('.//p:TextRegion',N).set('custom','readingOrder {index:0;} ');raw=E.tostring(root);(self.root/'page/p.xml').write_bytes(raw)
+  plan=self.prepare(document=0);frozen=(self.p.plan_folder(plan['id'])/'pages/84.xml').read_bytes();validate_web_custom(frozen)
+  self.assertEqual(page_signature(raw),page_signature(frozen));self.assertEqual((self.root/'page/p.xml').read_bytes(),raw)

@@ -1,6 +1,6 @@
 """Single-page versioned API writes with stale-version rejection and read-back."""
 import json,urllib.request,urllib.parse,time,base64,threading
-from pagexml import parse,N,page_signature
+from pagexml import parse,N,page_signature,normalize_custom_attributes,validate_web_custom
 class APIError(ValueError):
  def __init__(self,status):self.status=status;super().__init__('Transkribus API returned HTTP '+str(status))
 
@@ -39,6 +39,7 @@ class Transkribus:
   page,ts=self.remote(coll,doc,nr);raw=self.request(f'collections/{coll}/{doc}/{nr}/text')
   return raw,{'tsId':ts['tsId'],'pageId':page['pageId'],'docId':doc,'pageNr':nr,'status':ts['status'],'image':page['imgFileName']}
  def upload(self,coll,doc,nr,raw,expected):
+  raw=normalize_custom_attributes(raw);validate_web_custom(raw)
   page,current=self.remote(coll,doc,nr)
   if current['tsId']!=expected['tsId']:raise ValueError('Server version changed. Download the current page and reconcile it with your local edits before uploading.')
   root=parse(raw);m=root.find('.//p:TranskribusMetadata',N)
@@ -47,7 +48,7 @@ class Transkribus:
   result=json.loads(self.request(f'collections/{coll}/{doc}/{nr}/text?'+query,data=raw))
   # A failed read-back must not lead to retrying the POST blindly.
   try:
-   downloaded=self.request(f'collections/{coll}/{doc}/{nr}/text');p,new=self.remote(coll,doc,nr)
+   downloaded=self.request(f'collections/{coll}/{doc}/{nr}/text');validate_web_custom(downloaded);p,new=self.remote(coll,doc,nr)
    if new['tsId']!=result['tsId'] or page_signature(downloaded)!=page_signature(raw):raise ValueError('Saved PAGE differs from the submitted layout/text')
    return downloaded,{'verified':True,'tsId':result['tsId'],'parentTsId':current['tsId'],'pageNr':nr,'status':new['status']}
   except Exception as error:

@@ -4,7 +4,7 @@ from copy import deepcopy
 from unittest.mock import Mock
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from corpus import Corpus,letters,semiglobal
-from pagexml import model,update,parse,N,tag,page_signature,server_metadata
+from pagexml import model,update,parse,N,tag,page_signature,server_metadata,normalize_custom_attributes,validate_web_custom,order
 from transkribus import Transkribus
 from backend import Backend
 from lxml import etree as E
@@ -92,3 +92,30 @@ class UploadTests(unittest.TestCase):
   self.api.remote=Mock(return_value=(self.page,self.ts));self.api.request=Mock(side_effect=[b'{"tsId":2}',ValueError('network')])
   raw,receipt=self.api.upload(1,self.m['docId'],84,self.raw,{'tsId':1});self.assertIsNone(raw);self.assertFalse(receipt['verified']);self.assertEqual(receipt['tsId'],2)
 if __name__=='__main__':unittest.main()
+
+class WebCompatibilityTests(unittest.TestCase):
+ def test_legacy_trailing_space_is_repaired_without_changing_content(self):
+  root=parse(SAMPLE.read_bytes());line=root.find('.//p:TextLine',N)
+  value='readingOrder {index:0;} unclear {offset:0; length:1; alternative:ܐ; reason:Passage\\u003a Matthew 3\\u003a5;}'
+  line.set('custom',value+'  ');raw=E.tostring(root)
+  with self.assertRaisesRegex(ValueError,'trailing custom-tag whitespace'):validate_web_custom(raw)
+  out=normalize_custom_attributes(raw);validate_web_custom(out)
+  self.assertEqual(parse(out).find('.//p:TextLine',N).get('custom'),value)
+  self.assertEqual(page_signature(out),page_signature(raw))
+  self.assertEqual(normalize_custom_attributes(out),out)
+ def test_both_order_writers_emit_web_compatible_custom(self):
+  from layout_base import order as layout_order
+  for writer in (order,layout_order):
+   root=parse(SAMPLE.read_bytes());el=root.find('.//p:TextRegion',N);el.set('custom','readingOrder {index:7;} ')
+   writer(el,0);self.assertEqual(el.get('custom'),'readingOrder {index:0;}');validate_web_custom(E.tostring(root))
+ def test_invalid_custom_is_rejected_before_api_request(self):
+  root=parse(SAMPLE.read_bytes());root.find('.//p:TextLine',N).set('custom','readingOrder {index:0;} broken')
+  api=Transkribus();api.request=Mock();api.remote=Mock()
+  with self.assertRaisesRegex(ValueError,'Incomplete'):api.upload(1,2,3,E.tostring(root),{'tsId':1})
+  api.request.assert_not_called();api.remote.assert_not_called()
+ def test_saved_layout_removes_legacy_whitespace(self):
+  root=parse(SAMPLE.read_bytes())
+  for el in root.iter():
+   if el.get('custom'):el.set('custom',el.get('custom')+' ')
+  raw=E.tostring(root);out=update(raw,model(raw,'x','x'),SCHEMA);validate_web_custom(out)
+  self.assertEqual(page_signature(raw),page_signature(out))

@@ -43,7 +43,7 @@ def text(el): return el.findtext('p:TextEquiv/p:Unicode','',N)
 def order(el,i):
     custom=el.get('custom','')
     custom=re.sub(r'readingOrder\s*\{[^}]*\}\s*','',custom)
-    el.set('custom',f'readingOrder {{index:{i};}} '+custom)
+    el.set('custom',(f'readingOrder {{index:{i};}} '+custom).strip())
 @lru_cache(maxsize=8192)
 def geom(line):
     ps=points(line,'Baseline')

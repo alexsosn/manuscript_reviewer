@@ -9,7 +9,7 @@ from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor,as_completed
 import json,hashlib,re,uuid,time,os,threading,urllib.parse
 from lxml import etree as E
-from pagexml import parse,N,model,server_metadata,page_signature
+from pagexml import parse,N,model,server_metadata,page_signature,normalize_custom_attributes,validate_web_custom
 from layout_repair import body_regions
 from alignment_cache import load_cached
 from transkribus import APIError
@@ -100,7 +100,7 @@ class Publisher:
   for nr in numbers:
    source,name=self.b.source(nr)
    if not plan['includeDrafts']:source=self.b.pages[nr]
-   raw=source.read_bytes();source_hash=digest(raw);m=model(raw,name,str(source))
+   raw=source.read_bytes();source_hash=digest(raw);m=model(raw,name,str(source));raw=normalize_custom_attributes(raw)
    if m['docId']!=plan['sourceDocument']:raise ValueError('Local document identity mismatch')
    image=self.b.page(nr)['imageFile'];im=Path(self.b.settings['images'])/image
    if Path(image).name!=image:raise ValueError('Image must be inside the selected image folder')
@@ -109,6 +109,7 @@ class Publisher:
     body=body_regions(m['regions']);lines=[{'id':l['id'],'text':l['text']} for r in body for l in r['lines']]
     alignment=load_cached(Path(self.b.settings['source']).parent/'alignment',nr,lines) or self.b.get_corpus().align(lines)
     raw,notes=annotate(raw,alignment)
+   validate_web_custom(raw)
    validation=parse(raw)
    for el in validation.findall('.//p:TranskribusMetadata',N):el.getparent().remove(el)
    schema.assertValid(validation);(folder/'pages'/f'{nr}.xml').write_bytes(raw)
@@ -188,6 +189,7 @@ class Publisher:
     expected=plan['baseline'][key];info={'tsId':expected['tsId'],'pageId':expected['pageId'],'docId':doc,'pageNr':nr,'status':pages[nr]['tsList']['transcripts'][0]['status']};raw=server_metadata(raw,info)
     if prior.get('phase') in ('sending','accepted'):
      current,meta=self.api.pull(coll,doc,nr)
+     validate_web_custom(current)
      if page_signature(current)==page_signature(raw):
       with self.lock:state['pages'][key]={'phase':'verified','tsId':meta['tsId'],'pageId':meta['pageId']};self.update(folder,state,completed=sum(p['phase']=='verified' for p in state['pages'].values()))
       return
@@ -248,6 +250,7 @@ class Publisher:
   return b''.join(parts)+(f'--{boundary}--\r\n').encode(),'multipart/form-data; boundary='+boundary
  def import_copy(self,folder,plan,state):
   coll=plan['targetCollection']
+  for row in plan['rows']:validate_web_custom(self.import_xml(folder,row))
   if not state.get('importId'):
    if state.get('importAttempted'):raise ValueError('Upload session creation had an uncertain result. Inspect Transkribus uploads; do not create another session blindly')
    pages=[]
@@ -297,7 +300,7 @@ class Publisher:
   coll,doc=plan['targetCollection'],state['document'];target=json.loads(self.api.request(f'collections/{coll}/{doc}/fulldoc'));self.check_pages(plan,target)
   self.update(folder,state,phase='verifying',message='Verifying imported layout, OCR and reference annotations')
   def check(row):
-   nr=row['pageNr'];expected=self.import_xml(folder,row);actual,info=self.api.pull(coll,doc,nr)
+   nr=row['pageNr'];expected=self.import_xml(folder,row);actual,info=self.api.pull(coll,doc,nr);validate_web_custom(actual)
    if page_signature(actual)!=page_signature(expected):raise ValueError(f'Page {nr}: imported PAGE differs from prepared text/layout/tags. No overwrite was attempted')
    with self.lock:
     state['pages'][str(nr)]={'phase':'verified','tsId':info['tsId'],'pageId':info['pageId']};self.update(folder,state,completed=len(state['pages']))
