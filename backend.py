@@ -4,22 +4,41 @@ from datetime import datetime,timezone
 import sys,json,hashlib,os,uuid
 from pagexml import model,update,parse,N,server_metadata
 from corpus import Corpus
+from alignment import mapped
 from paleography import Paleography
 from transkribus import Transkribus
 HERE=Path(__file__).resolve().parent
 class Backend:
  def __init__(self,root=None):
   self.root=Path(root or HERE.parent).resolve();self.corpus=None;self.api=Transkribus();self.pages={};self.settings={};self.configure({})
- def configure(self,patch):
+ def configure(self,patch,persist=True):
   if patch.get('root'):self.root=Path(patch['root']).resolve()
   setting=self.root/'local_edits/settings.json'
-  defaults={'source':str(self.root/'layout_corrected/page'),'images':str(self.root/'Preliminary_Setup__BL_Add_MS_14,470'),'output':str(self.root/'local_edits'),'collection':2536248,'document':19244795,'uploadPages':[3,4,349]}
+  defaults={'source':str(self.root/'layout_corrected/page'),'images':str(self.root/'Preliminary_Setup__BL_Add_MS_14,470'),'output':str(self.root/'local_edits'),'collection':2536248,'document':19244795,'uploadPages':[3,4,349],'enhancedImages':str(self.root/'readable_images')}
   if not Path(defaults['source']).is_dir():defaults['source']=str(self.root/'page')
   if not Path(defaults['images']).is_dir():defaults['images']=str(self.root)
   try:defaults.update(json.loads(setting.read_text()))
   except FileNotFoundError:pass
-  defaults.update({k:v for k,v in patch.items() if k in defaults});self.settings=defaults
-  if patch:
+  profile_keys=('title','source','images','output','collection','document','uploadPages','enhancedImages')
+  profiles=defaults.get('profiles') or {'legacy':{**{k:defaults[k] for k in profile_keys if k in defaults},'title':'Preliminary Setup (older OCR)'}}
+  # Downloaded documents describe relative local folders; credentials never live here.
+  for config in (self.root/'documents').glob('*/document.json'):
+   entry=json.loads(config.read_text());key=str(entry['document'])
+   if key in profiles:continue
+   base=config.parent.resolve();profile={k:entry[k] for k in ('title','collection','document')};profile['uploadPages']=[];profile['enhancedImages']=''
+   for name in ('source','images','output'):
+    folder=(base/entry[name]).resolve()
+    if not folder.is_relative_to(base):raise ValueError('Document folder escapes its local document directory')
+    profile[name]=str(folder)
+   profiles[key]=profile
+  active=patch.get('activeProfile',defaults.get('activeProfile','legacy'))
+  if active not in profiles:raise ValueError('Unknown local document')
+  defaults.update(profiles[active]);defaults.update({k:v for k,v in patch.items() if k in defaults and k not in ('profiles','activeProfile')})
+  defaults['profiles']=profiles;defaults['activeProfile']=active
+  # Store each document's paths and upload scope independently.
+  profiles[active]={k:defaults[k] for k in profile_keys if k in defaults}
+  self.settings=defaults
+  if patch and persist:
    setting.parent.mkdir(parents=True,exist_ok=True);self.atomic(setting,json.dumps(defaults,indent=2).encode())
   self.pages={}
   for f in Path(defaults['source']).glob('*.xml'):
@@ -27,7 +46,7 @@ class Backend:
     t=parse(f.read_bytes());m=t.find('.//p:TranskribusMetadata',N)
     if m is not None:self.pages[int(m.get('pageNr'))]=f
    except Exception:continue
-  return {**defaults,'books':self.get_corpus().books_names() if hasattr(self.get_corpus(),'books_names') else [b['name'] for b in self.get_corpus().books],'root':str(self.root),'connected':bool(self.api.token)}
+  return {**defaults,'books':self.get_corpus().books_names() if hasattr(self.get_corpus(),'books_names') else [b['name'] for b in self.get_corpus().books],'root':str(self.root),'connected':bool(self.api.token),'documents':[{'id':key,'title':value.get('title',key)} for key,value in profiles.items()]}
  def get_corpus(self):
   if self.corpus is None:self.corpus=Corpus(HERE/'data')
   return self.corpus
@@ -54,15 +73,19 @@ class Backend:
   data['edited']=p.parent==Path(self.settings['output'])/'page'
   return data
  def index(self):
-  result=[]
+  result=[];review=set()
+  try:
+   report=json.loads((Path(self.settings['source']).parent.parent/'coverage.json').read_text());review.update(report['summary']['lowLetterAgreement']);review.update(report['summary']['boundaryOverlaps']);review.update(r['pageNr'] for r in report['pages'] if r.get('boundary',{}).get('status')=='gap' and r['boundary'].get('characters',0)>50)
+  except (FileNotFoundError,ValueError,KeyError):pass
   for nr in sorted(self.pages):
    p,name=self.source(nr)
    t=parse(p.read_bytes());m=t.find('.//p:TranskribusMetadata',N)
-   result.append({'pageNr':nr,'file':name,'lines':len(t.findall('.//p:TextLine',N)),'edited':p.parent==Path(self.settings['output'])/'page','tsId':m.get('tsid')})
+   result.append({'pageNr':nr,'file':name,'lines':len(t.findall('.//p:TextLine',N)),'edited':p.parent==Path(self.settings['output'])/'page','tsId':m.get('tsid'),'needsReview':nr in review})
   return result
  def schema(self):return self.root/'layout_corrected/pagecontent-2013.xsd' if (self.root/'layout_corrected/pagecontent-2013.xsd').exists() else HERE/'data/pagecontent-2013.xsd'
  def save(self,data):
   src,name=self.source(data['pageNr']);raw=src.read_bytes()
+  if data['docId']!=int(parse(raw).find('.//p:TranskribusMetadata',N).get('docId')):raise ValueError('Cannot save a page from another selected document')
   if hashlib.sha256(raw).hexdigest()!=data['revision']:raise ValueError('Local XML changed since opening. Reload it before saving.')
   revised=update(raw,data,self.schema());dest=Path(self.settings['output'])/'page'/name
   dest.parent.mkdir(parents=True,exist_ok=True);backup=dest.parent.parent/'backups'/name
@@ -103,12 +126,27 @@ class Backend:
   if cmd=='paleoSave':return Paleography(self).save(arg['example'],arg['revision'])
   if cmd=='paleoDelete':return Paleography(self).delete(arg['id'],arg['revision'])
   if cmd=='settings':return self.configure(arg)
+  if cmd=='selectDocument':return self.configure({'activeProfile':arg['id']},persist=arg.get('persist',True))
   if cmd=='index':return self.index()
   if cmd=='page':return self.page(arg['pageNr'])
   if cmd=='save':return self.save(arg['page'])
   if cmd=='align':
-   lines=[{'id':l['id'],'text':l['text']} for r in arg['page']['regions'][:2] for l in r['lines']]
-   return self.get_corpus().align(lines,arg.get('book',''),arg.get('anchor',''))
+   from layout_repair import body_regions
+   regions=arg['page']['regions'];body=body_regions(regions)
+   lines=[{'id':l['id'],'text':l['text']} for r in body for l in r['lines']]
+   from alignment_cache import input_digest,load_cached,continuity
+   cache=Path(self.settings['source']).parent/'alignment'
+   result=None
+   if not arg.get('book') and not arg.get('anchor') and not arg.get('endAnchor'):result=load_cached(cache,arg['page']['pageNr'],lines)
+   if result is None:result=self.get_corpus().align(lines,arg.get('book',''),arg.get('anchor',''),arg.get('endAnchor',''))
+   if result.get('letterScore',1)<.85:result['warning']='Passage needs review: lower letter agreement. Verify both reference boundaries and inspect the highlighted differences.'
+   nr=arg['page']['pageNr'];previous=nr-1
+   if previous in self.pages:
+    previous_model=self.page(previous);prior_lines=[{'id':l['id'],'text':l['text']} for r in body_regions(previous_model['regions']) for l in r['lines']]
+    prior=load_cached(cache,previous,prior_lines)
+    result['continuity']=continuity(prior,result,self.get_corpus()) if prior else {'status':'unverified','message':'Previous page has no current alignment; the page boundary needs review.'}
+   result['excludedLines']=[{'id':l['id'],'text':l['text'],'reason':'Outside the two body columns; review separately'} for r in regions if r not in body for l in r['lines']]
+   return result
   if cmd=='lookup':return self.get_corpus().lookup(arg['word'],arg.get('wordId'))
   if cmd=='login':return self.api.login(arg.get('username'),arg.get('password'),arg.get('saved',False))
   if cmd=='disconnect':self.api=Transkribus();return {'connected':False}

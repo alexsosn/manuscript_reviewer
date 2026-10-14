@@ -1,6 +1,6 @@
 {
   "name": "syriac-validator",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Local PAGE XML layout and Syriac transcription editor with Peshitta alignment",
@@ -30,7 +30,13 @@
       "transkribus.py",
       "saved_login.py",
       "morphology.py",
-      "paleography.py"
+      "paleography.py",
+      "alignment.py",
+      "alignment_cache.py",
+      "layout_base.py",
+      "layout_refine.py",
+      "layout_repair.py",
+      "column_layout.py"
     ],
     "extraResources": [
       {
@@ -57,7 +63,13 @@
           "transkribus.py",
           "saved_login.py",
           "morphology.py",
-          "paleography.py"
+          "paleography.py",
+          "alignment.py",
+          "alignment_cache.py",
+          "layout_base.py",
+          "layout_refine.py",
+          "layout_repair.py",
+          "column_layout.py"
         ]
       }
     ],

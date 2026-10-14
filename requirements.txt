@@ -1,2 +1,4 @@
 lxml>=5,<7
 cryptography>=43,<47
+numpy>=1.24
+Pillow>=10

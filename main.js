@@ -7,7 +7,7 @@ import {Bridge} from './bridge.js';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 protocol.registerSchemesAsPrivileged([{scheme:'syriac-image',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true}}]);
 let bridge,settings,window;
-const allowed=new Set(['settings','index','page','save','align','lookup','login','disconnect','pull','upload','paleography','paleoSave','paleoDelete']);
+const allowed=new Set(['settings','selectDocument','index','page','save','align','lookup','login','disconnect','pull','upload','paleography','paleoSave','paleoDelete']);
 function parentWorkspace(start){let p=start;for(let i=0;i<9;i++){if(existsSync(path.join(p,'Preliminary_Setup__BL_Add_MS_14,470')))return p;const q=path.dirname(p);if(q===p)break;p=q}return null}
 async function create(){
  const persisted=path.join(app.getPath('userData'),'workspace.json');let workspace=process.env.SYRIAC_WORKSPACE||parentWorkspace(HERE);
@@ -17,12 +17,12 @@ async function create(){
  protocol.handle('syriac-image',req=>{
   const url=new URL(req.url),name=decodeURIComponent(url.pathname.slice(1));
   if(!name||path.basename(name)!==name)return new Response('',{status:400});
-  const folder=url.hostname==='source'?settings.images:['colour','ink'].includes(url.hostname)?path.join(settings.root,'readable_images',url.hostname):null;
+  const folder=url.hostname==='source'?settings.images:['colour','ink'].includes(url.hostname)?(settings.enhancedImages?path.join(settings.enhancedImages,url.hostname):null):null;
   if(!folder)return new Response('',{status:404});return net.fetch(pathToFileURL(path.join(folder,name)).href);
  });
  ipcMain.handle('request',async(event,command,args)=>{
   if(!allowed.has(command)||event.sender!==window.webContents)throw new Error('Request rejected');
-  if(command==='settings'){settings=await bridge.request(command,args);return settings}return bridge.request(command,args);
+  if(['settings','selectDocument'].includes(command)){settings=await bridge.request(command,args);return settings}return bridge.request(command,args);
  });
  ipcMain.handle('chooseFolder',async(event,kind)=>{
   if(event.sender!==window.webContents||!['root','source','images','output'].includes(kind))throw new Error('Folder request rejected');

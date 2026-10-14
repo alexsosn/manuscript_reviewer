@@ -102,7 +102,7 @@ class Corpus:
   for analysis in analyses:
    analysis['glosses']=list(dict.fromkeys(e['gloss'] for e in self.lex.get(analysis['lexicalKey'],[]) if e['gloss']))
   return {'query':word,'analyses':analyses,'lookupKey':key,'entries':[h for h in hits[:16] if h['gloss']], 'note':'Lexeme candidates; inflected forms and manuscript variants may not have exact headword matches.'}
- def align(self,lines,book='',anchor=''):
+ def align(self,lines,book='',anchor='',end_anchor=''):
   query='';segments=[]
   for line in lines:
    value=letters(line['text']);segments.append((line['id'],len(query),len(query)+len(value)));query+=value
@@ -130,10 +130,34 @@ class Corpus:
    a=max(lo,candidate-180);b=min(hi,candidate+len(query)+max(350,len(query)//3))
    score=SequenceMatcher(None,query,self.text[a:b],autojunk=False).ratio();scored.append((score,a,b))
   _,a,b=max(scored);window=self.text[a:b];edges,start,end,cost=semiglobal(query,window)
-  confidence=max(0,1-cost/max(1,len(query),end-start));items=[]
+  letter_confidence=max(0,1-cost/max(1,len(query),end-start))
+  from alignment import mapped,global_path,differences
+  # Locate by letters, then pin both ends and compare every mark/punctuation.
+  rawstart=self.offsets[a+start]
+  end_index=a+end
+  rawend=self.offsets[end_index] if end_index<len(self.offsets) else len(self.raw)
+  passage_start=rawstart
+  if end_anchor:
+   if not anchor:raise ValueError('Enter a reference start as well as the reference end')
+   endmatch=re.match(r'(?:(.*?)\s+)?(\d+):(\d+)$',end_anchor.strip())
+   if not endmatch:raise ValueError('Reference end must be Book chapter:verse or chapter:verse')
+   endbook=endmatch[1] or abook
+   endverse=next((verse for verse in self.verses if verse['book']==endbook and verse['chapter']==int(endmatch[2]) and verse['verse']==int(endmatch[3])),None)
+   if not endverse or endverse['end']<=v['start']:raise ValueError('Reference end precedes the start or was not found')
+   passage_start=rawstart=v['start'];rawend=endverse['end']
+  full_reference=self.raw[rawstart:rawend]
+  if end_anchor:
+   _,letter_cost=global_path(query,letters(full_reference));letter_confidence=max(0,1-letter_cost/max(1,len(query),len(letters(full_reference))))
+  full_query='';segments=[]
+  for line in lines:
+   value,_=mapped(line['text']);segments.append((line['id'],len(full_query),len(full_query)+len(value)));full_query+=value
+  ref_chars,ref_offsets=mapped(full_reference)
+  edges,cost=global_path(full_query,ref_chars);items=[]
+  confidence=max(0,1-cost/max(1,len(full_query),len(ref_chars)))
   def raw_boundary(q):
-   absolute=a+edges[q]
-   return self.offsets[absolute] if absolute<len(self.offsets) else len(self.raw)
+   pos=edges[q]
+   return passage_start+(ref_offsets[pos] if pos<len(ref_offsets) else len(full_reference))
+
   for ident,qstart,qend in segments:
    if qstart==qend:items.append({'id':ident,'reference':'','address':'','splitStart':False,'splitEnd':False,'score':0});continue
    rawstart,rawend=raw_boundary(qstart),raw_boundary(qend)
@@ -143,5 +167,13 @@ class Corpus:
    split=lambda off:0<off<len(self.raw) and self.raw[off-1].isalpha() and self.raw[off].isalpha()
    line=next(l for l in lines if l['id']==ident)
    ratio=SequenceMatcher(None,letters(line['text']),letters(text),autojunk=False).ratio()
-   items.append({'id':ident,'reference':text,'words':words,'address':address,'splitStart':split(rawstart),'splitEnd':split(rawend),'score':round(ratio,3)})
-  return {'lines':items,'score':round(confidence,3),'passage':items[0]['address']+' → '+items[-1]['address'],'warning':'Low-confidence alignment: treat suggestions as candidates and adjust the reference start.' if confidence<.65 else '', 'normalization':'Matching ignores vowel marks, punctuation and spaces; original text remains unchanged.'}
+   items.append({'id':ident,'reference':text,'words':words,'address':address,'splitStart':split(rawstart),'splitEnd':split(rawend),'score':round(SequenceMatcher(None,mapped(line['text'])[0],mapped(text)[0],autojunk=False).ratio(),3),'changes':differences(line['text'],text),'referenceStart':rawstart,'referenceEnd':rawend})
+  joined=''.join(item['reference'] for item in items)
+  assert mapped(joined)[0]==ref_chars,'Reference span was omitted at a line boundary'
+  changes=differences(''.join(l['text'] for l in lines),full_reference)
+  missing=sum(len(c['reference']) for c in changes if c['operation']=='insert')
+  extra=sum(len(c['ocr']) for c in changes if c['operation']=='delete')
+  return {'lines':items,'score':round(confidence,3),'letterScore':round(letter_confidence,3),'passage':items[0]['address']+' → '+items[-1]['address'],
+   'warning':'Low-confidence passage location: verify the book and reference start; all differences remain visible.' if letter_confidence<.85 else '',
+   'coverage':{'boundsSource':'manual verses' if end_anchor else 'automatic; verify page boundaries','referenceStart':passage_start,'referenceEnd':passage_start+len(full_reference),'referenceCharacters':len(ref_chars),'assignedReferenceCharacters':len(mapped(joined)[0]),'unassignedReferenceCharacters':0,'missingReferenceCharacters':missing,'extraOcrCharacters':extra,'differenceGroups':len(changes),'complete':True,'scope':'One continuous selected reference span; passage boundaries require review.'},
+   'normalization':'Passage located by letters; comparison retains diacritics, punctuation and all other non-whitespace characters (NFD).'}

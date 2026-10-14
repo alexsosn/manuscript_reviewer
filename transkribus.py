@@ -19,12 +19,12 @@ class Transkribus:
    with urllib.request.urlopen(req,timeout=45) as response:data=json.load(response)
   except urllib.error.HTTPError as e:raise ValueError('Login failed (HTTP '+str(e.code)+'). Credentials were not saved.') from None
   self.token=data['access_token'];self.refresh=data.get('refresh_token')
- def request(self,path,data=None):
+ def request(self,path,data=None,accept=None):
   if not self.token:raise ValueError('Connect to Transkribus first')
   if self.expires<time.time()+20:
    if self.refresh:self._token({'grant_type':'refresh_token','refresh_token':self.refresh,'client_id':self.client});self.expires=time.time()+180
    else:self.login(saved=True)
-  req=urllib.request.Request(BASE+path,data=data,headers={'Authorization':'Bearer '+self.token,'Accept':'application/json' if data is not None or path.endswith('fulldoc') else 'application/xml','Content-Type':'application/xml; charset=UTF-8'})
+  req=urllib.request.Request(BASE+path,data=data,headers={'Authorization':'Bearer '+self.token,'Accept':accept or ('application/json' if data is not None or path.endswith('fulldoc') else 'application/xml'),'Content-Type':'application/xml; charset=UTF-8'})
   try:
    with urllib.request.urlopen(req,timeout=60) as response:return response.read()
   except urllib.error.HTTPError as e:raise ValueError('Transkribus API returned HTTP '+str(e.code)) from None
