@@ -7,7 +7,7 @@ import {Bridge} from './bridge.js';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 protocol.registerSchemesAsPrivileged([{scheme:'syriac-image',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true}}]);
 let bridge,settings,window;
-const allowed=new Set(['settings','selectDocument','index','page','save','align','lookup','login','disconnect','pull','upload','paleography','paleoSave','paleoDelete']);
+const allowed=new Set(['settings','selectDocument','index','page','save','align','lookup','login','disconnect','pull','upload','paleography','paleoSave','paleoDelete','publishTargets','publishDocuments','publishPrepare','publishStart','publishStatus','publishJobs','publishPause']);
 function parentWorkspace(start){let p=start;for(let i=0;i<9;i++){if(existsSync(path.join(p,'Preliminary_Setup__BL_Add_MS_14,470')))return p;const q=path.dirname(p);if(q===p)break;p=q}return null}
 async function create(){
  const persisted=path.join(app.getPath('userData'),'workspace.json');let workspace=process.env.SYRIAC_WORKSPACE||parentWorkspace(HERE);

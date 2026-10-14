@@ -1,6 +1,6 @@
 {
   "name": "syriac-validator",
-  "version": "0.5.0",
+  "version": "0.6.1",
   "private": true,
   "type": "module",
   "description": "Local PAGE XML layout and Syriac transcription editor with Peshitta alignment",
@@ -36,7 +36,8 @@
       "layout_base.py",
       "layout_refine.py",
       "layout_repair.py",
-      "column_layout.py"
+      "column_layout.py",
+      "publishing.py"
     ],
     "extraResources": [
       {
@@ -69,7 +70,8 @@
           "layout_base.py",
           "layout_refine.py",
           "layout_repair.py",
-          "column_layout.py"
+          "column_layout.py",
+          "publishing.py"
         ]
       }
     ],

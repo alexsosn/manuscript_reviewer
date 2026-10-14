@@ -10,7 +10,7 @@ from transkribus import Transkribus
 HERE=Path(__file__).resolve().parent
 class Backend:
  def __init__(self,root=None):
-  self.root=Path(root or HERE.parent).resolve();self.corpus=None;self.api=Transkribus();self.pages={};self.settings={};self.configure({})
+  self.root=Path(root or HERE.parent).resolve();self.corpus=None;self.api=Transkribus();self.pages={};self.settings={};self.publisher=None;self.configure({})
  def configure(self,patch,persist=True):
   if patch.get('root'):self.root=Path(patch['root']).resolve()
   setting=self.root/'local_edits/settings.json'
@@ -122,6 +122,18 @@ class Backend:
   return {'receipt':receipt,'page':self.page(nr)}
  def handle(self,req):
   cmd=req['command'];arg=req.get('args',{})
+  if self.publisher and self.publisher.active() and cmd not in ('publishStatus','publishJobs','publishPause','publishTargets','publishDocuments'):raise ValueError('An upload is running; wait for it to finish before editing, switching or disconnecting')
+  if cmd.startswith('publish'):
+   from publishing import Publisher
+   if self.publisher is None or self.publisher.folder!=Path(self.settings['output'])/'publishing':self.publisher=Publisher(self)
+   self.publisher.api=self.api
+   if cmd=='publishTargets':return self.publisher.targets()
+   if cmd=='publishDocuments':return self.publisher.documents(arg['collection'])
+   if cmd=='publishPrepare':return self.publisher.prepare(arg)
+   if cmd=='publishPause':return self.publisher.pause(arg['id'])
+   if cmd=='publishStart':return self.publisher.start(arg['id'])
+   if cmd=='publishStatus':return {**self.publisher.status(arg['id']),'active':self.publisher.active()}
+   if cmd=='publishJobs':return self.publisher.plans()
   if cmd=='paleography':return Paleography(self).read()
   if cmd=='paleoSave':return Paleography(self).save(arg['example'],arg['revision'])
   if cmd=='paleoDelete':return Paleography(self).delete(arg['id'],arg['revision'])
@@ -149,7 +161,7 @@ class Backend:
    return result
   if cmd=='lookup':return self.get_corpus().lookup(arg['word'],arg.get('wordId'))
   if cmd=='login':return self.api.login(arg.get('username'),arg.get('password'),arg.get('saved',False))
-  if cmd=='disconnect':self.api=Transkribus();return {'connected':False}
+  if cmd=='disconnect':self.api=Transkribus();self.publisher=None;return {'connected':False}
   if cmd=='pull':return self.pull(arg['pageNr'])
   if cmd=='upload':return self.upload(arg['pageNr'])
   raise ValueError('Unknown command')

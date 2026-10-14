@@ -20,7 +20,7 @@ Choose your manuscript workspace when prompted, then configure PAGE input, image
 
 Run `npm test` and `python -m unittest discover -s tests -p 'test_*.py'` after fetching reference data. A real-page integration test additionally runs when this checkout is inside the existing manuscript workspace; it is skipped elsewhere. Build the macOS app with `npm run build`.
 
-Local Electron editor for the BL Add MS 14,470 manuscript. Open the latest build, `dist/v0.5/mac/Syriac validator.app` on this Intel Mac. The packaged app finds this manuscript workspace automatically. Folders / settings lets you choose another workspace, PAGE input folder, image folder and output folder.
+Local Electron editor for the BL Add MS 14,470 manuscript. Open the latest build, `dist/v0.6.1/mac/Syriac validator.app` on this Intel Mac. The packaged app finds this manuscript workspace automatically. Folders / settings lets you choose another workspace, PAGE input folder, image folder and output folder.
 
 ## Manuscript XML repository
 
@@ -46,9 +46,16 @@ Connect using the Java client's saved login on this Mac or your account credenti
 
 Before editing a page already changed online, use **Get server page** to download its current version. This backs up the local draft and replaces it with current server XML; reconcile your changes before upload. The app does not automatically merge local and remote changes.
 
-**Upload this page** submits only the selected page, creates a new transcript version, preserves its current status, checks the current server transcript ID against the locally opened ID, and downloads the result to verify layout/text. A newer remote version blocks upload. There remains a small race between the version check and submission; coordinate page ownership with other editors. Accepted uploads with failed verification are reported explicitly: inspect/download before trying again. Receipts are written to `local_edits/uploads`.
+**Upload…** opens two destinations:
 
-The initial collection/document are 2536248 / 19244795. Upload scope defaults to pages **3, 4, 349** because other people are editing other pages. Change “Pages I am editing” only after coordinating with them. There are no batch uploads or automatic remote writes.
+- **Full automatic copy** creates an independent document in your private collection **AI_BL_Add_MS_14,470 (2554943)**, or updates a previously verified copy. Current local manual drafts and Peshitta review tags are included by default. Untick drafts to publish only the automatic source results. The shared source collection cannot be chosen for this mode.
+- **Selected pages** updates only an explicit list such as `3, 4` in an existing destination document. The shared source document is the default destination. Confirm page ownership with collaborators first. A newer or untracked server transcript blocks preparation or upload; download and reconcile it first.
+
+**Prepare upload** freezes the XML and shows the exact destination, pages, draft choice and tag count before **Upload** makes any server changes. Missing or different reference spellings, diacritics and punctuation become native `unclear` text spans with **alternative** and **reason**, including the passage. OCR text is preserved. Missing reference text is anchored to a neighboring manuscript character; uncertain passage boundaries are identified in the reason. These annotations are review suggestions.
+
+Full copies get independent document and page IDs. If your source role forbids server duplication, the app uploads local images and PAGE files through the [Transkribus upload API](https://www.transkribus.org/blog/transkribus/docu/rest-api/upload). Source XML identities stay unchanged locally. Every resulting page is downloaded and checked against its frozen text, layout and tags; image checksums and target identities are checked too.
+
+Plans and per-page receipts are stored under the current document's `local_edits/publishing`. Keep the app open while its upload runs, or use **Pause** to stop after active transfers finish. **Resume / inspect** continues the same plan after a pause or restart. Interrupted submissions are reconciled against the server before any retry. Shared selected pages are submitted sequentially as new transcript versions. The API has a small race between checking the current version and submitting, so coordinating ownership remains necessary. Uploads never run just because you open, repair or align a page.
 
 ## Data and runtime
 
@@ -58,7 +65,7 @@ This build uses the existing Python runtime on this Mac, including lxml and cryp
 
 Development: `npm start`; browser preview: `npm run preview` at http://127.0.0.1:8770. The browser preview uses the same interface but intentionally cannot save, authenticate or upload. Python backend tests: use the configured Python with `-m unittest discover -s tests -p 'test_*.py'`; geometry tests: `npm test`.
 
-API upload checks are covered with mocks and use the previously verified single-page API route. This app's connection/download is smoke-tested against the live service; no manuscript page is uploaded during app development testing.
+Upload routing and recovery have mocked backend tests. The authorized full-copy test uses private collection 2554943; shared pages are not changed by that test.
 
 CAL was evaluated as an alternative. Its public server requests that automated clients obtain an academic data dump rather than scrape the website. The editor therefore uses the existing SyrNT morphology with sycgloss glosses; it does not claim to provide CAL definitions.
 
@@ -74,7 +81,7 @@ The catalog is independent of PAGE XML: `local_edits/paleography/index.json`, wi
 
 ## Page-local reference review experiment
 
-`tools/reference_review.py` prepares native Transkribus `unclear` spans with the SyrNT spelling in **alternative** and the book/chapter/verse in **reason**. It compares whole-page letter sequences while retaining physical line anchors and is restricted to pages 3 and 4. It does not create collection-wide tags. `prepare WORK_FOLDER` downloads current versions and validates annotation-only changes; `upload WORK_FOLDER` checks hashes and parent versions, creates new versions, and verifies read-back. Existing receipts prevent repeat submission. No Electron menu or automatic remote write was added.
+`tools/reference_review.py` prepares native Transkribus `unclear` spans with the SyrNT spelling in **alternative** and the book/chapter/verse in **reason**. It compares whole-page letter sequences while retaining physical line anchors and is restricted to pages 3 and 4. It does not create collection-wide tags. `prepare WORK_FOLDER` downloads current versions and validates annotation-only changes; `upload WORK_FOLDER` checks hashes and parent versions, creates new versions, and verifies read-back. Existing receipts prevent repeat submission. That standalone experiment does not automatically upload anything; the newer Upload dialog can prepare the same native fields for explicitly chosen destinations.
 
 `tools/fix_reference_comments.py prepare WORK_FOLDER` converts only the earlier experiment's Reference spelling / Passage comments into these native fields; `upload WORK_FOLDER PAGE` is restricted to page 3 or 4. The original comment definition showed only an empty `type` field in the web editor; adding `type` was insufficient because web serialization discarded it. Native alternative/reason fields were visually verified and survived a web save. The XML repository records the final experiment under `reference_review_3_4/native_tags`. Existing local drafts are not automatically replaced.
 
@@ -82,7 +89,7 @@ The catalog is independent of PAGE XML: `local_edits/paleography/index.json`, wi
 
 The **Document** selector switches between the old Preliminary Setup and the new **BL Add MS 14,470** (document 19237519). Paths, drafts, backups, paleography catalogs and permitted upload pages are independent. Switching saves desktop edits first; a page from another document cannot be saved into the selected document. The new document starts with no permitted upload pages because this preparation is local only. No server uploads are part of downloading, repairing or aligning.
 
-Downloaded documents have `documents/DOC_ID/document.json`, using paths relative to that directory. The app discovers these descriptors and persists the active profile in the workspace's ignored `local_edits/settings.json`. Originals are in `original/page`, generated corrections in `corrected_v2/page` for the current document (or `corrected/page` for a fresh default preparation), images in `images` and manual drafts in `local_edits/page`. The old workspace keeps its existing paths. Rebuilding does not overwrite a running older app; version 0.5 is packaged separately under `dist/v0.5/mac`.
+Downloaded documents have `documents/DOC_ID/document.json`, using paths relative to that directory. The app discovers these descriptors and persists the active profile in the workspace's ignored `local_edits/settings.json`. Originals are in `original/page`, generated corrections in `corrected_v2/page` for the current document (or `corrected/page` for a fresh default preparation), images in `images` and manual drafts in `local_edits/page`. The old workspace keeps its existing paths. Rebuilding does not overwrite a running older app; version 0.6.1 is packaged separately under `dist/v0.6.1/mac`.
 
 `tools/download_document.py --collection ID --document ID` (run from the workspace) downloads a frozen transcript snapshot with image/PAGE checksums and saved transcript identities. It resumes the same snapshot instead of replacing original exports with newer server work. It issues no API writes. `tools/prepare_document.py DOCUMENT_FOLDER` repairs the downloaded layouts and prepares cached alignments; it never overwrites an existing corrected page or manual draft. Image-guided merges and endpoint extensions retain source XML in local reports. Lines with human text-span tags are excluded from automatic merges. All non-whitespace OCR characters, including marks and punctuation, must survive, and corrected PAGE must pass its schema.
 

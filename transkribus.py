@@ -1,9 +1,12 @@
 """Single-page versioned API writes with stale-version rejection and read-back."""
-import json,urllib.request,urllib.parse,time,base64
+import json,urllib.request,urllib.parse,time,base64,threading
 from pagexml import parse,N,page_signature
+class APIError(ValueError):
+ def __init__(self,status):self.status=status;super().__init__('Transkribus API returned HTTP '+str(status))
+
 BASE='https://transkribus.eu/TrpServer/rest/'
 class Transkribus:
- def __init__(self):self.token=None;self.refresh=None;self.client='transkribus-api-client';self.expires=0
+ def __init__(self):self.token=None;self.refresh=None;self.client='transkribus-api-client';self.expires=0;self.auth_lock=threading.RLock()
  def login(self,user=None,password=None,saved=False):
   if saved:
    from saved_login import access_token
@@ -19,18 +22,18 @@ class Transkribus:
    with urllib.request.urlopen(req,timeout=45) as response:data=json.load(response)
   except urllib.error.HTTPError as e:raise ValueError('Login failed (HTTP '+str(e.code)+'). Credentials were not saved.') from None
   self.token=data['access_token'];self.refresh=data.get('refresh_token')
- def request(self,path,data=None,accept=None):
-  if not self.token:raise ValueError('Connect to Transkribus first')
-  if self.expires<time.time()+20:
-   if self.refresh:self._token({'grant_type':'refresh_token','refresh_token':self.refresh,'client_id':self.client});self.expires=time.time()+180
-   else:self.login(saved=True)
-  req=urllib.request.Request(BASE+path,data=data,headers={'Authorization':'Bearer '+self.token,'Accept':accept or ('application/json' if data is not None or path.endswith('fulldoc') else 'application/xml'),'Content-Type':'application/xml; charset=UTF-8'})
+ def request(self,path,data=None,accept=None,method=None,content_type="application/xml; charset=UTF-8"):
+  with self.auth_lock:
+   if not self.token:raise ValueError('Connect to Transkribus first')
+   if self.expires<time.time()+20:
+    if self.refresh:self._token({'grant_type':'refresh_token','refresh_token':self.refresh,'client_id':self.client});self.expires=time.time()+180
+    else:self.login(saved=True)
+  req=urllib.request.Request(BASE+path,data=data,headers={'Authorization':'Bearer '+self.token,'Accept':accept or ('application/json' if data is not None or path.endswith('fulldoc') else 'application/xml'),'Content-Type':content_type},method=method)
   try:
    with urllib.request.urlopen(req,timeout=60) as response:return response.read()
-  except urllib.error.HTTPError as e:raise ValueError('Transkribus API returned HTTP '+str(e.code)) from None
+  except urllib.error.HTTPError as e:raise APIError(e.code) from None
  def remote(self,coll,doc,nr):
-  document=json.loads(self.request(f'collections/{coll}/{doc}/fulldoc'))
-  page=next(p for p in document['pageList']['pages'] if p['pageNr']==nr)
+  page=json.loads(self.request(f'collections/{coll}/{doc}/{nr}',accept='application/json'))
   return page,page['tsList']['transcripts'][0]
  def pull(self,coll,doc,nr):
   page,ts=self.remote(coll,doc,nr);raw=self.request(f'collections/{coll}/{doc}/{nr}/text')
