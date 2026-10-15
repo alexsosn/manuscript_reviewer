@@ -1,7 +1,7 @@
 """One JSON request per line. Files and credentials stay outside the renderer."""
 from pathlib import Path
 from datetime import datetime,timezone
-import sys,json,hashlib,os,uuid
+import sys,json,hashlib,os,uuid,re
 from pagexml import model,update,parse,N,server_metadata
 from corpus import Corpus
 from alignment import mapped
@@ -10,7 +10,7 @@ from transkribus import Transkribus
 HERE=Path(__file__).resolve().parent
 class Backend:
  def __init__(self,root=None):
-  self.root=Path(root or HERE.parent).resolve();self.corpus=None;self.api=Transkribus();self.pages={};self.settings={};self.publisher=None;self.configure({})
+  self.root=Path(root or HERE.parent).resolve();self.corpus=None;self.api=Transkribus();self.pages={};self.settings={};self.publisher=None;self.translations=None;self.configure({})
  def configure(self,patch,persist=True):
   if patch.get('root'):self.root=Path(patch['root']).resolve()
   setting=self.root/'local_edits/settings.json'
@@ -157,6 +157,17 @@ class Backend:
     previous_model=self.page(previous);prior_lines=[{'id':l['id'],'text':l['text']} for r in body_regions(previous_model['regions']) for l in r['lines']]
     prior=load_cached(cache,previous,prior_lines)
     result['continuity']=continuity(prior,result,self.get_corpus()) if prior else {'status':'unverified','message':'Previous page has no current alignment; the page boundary needs review.'}
+   from translations import Translations
+   if self.translations is None:self.translations=Translations(HERE/'data/translations')
+   for ref in result.get('lines',[]):
+    for word in ref.get('words',[]):
+     if word.get('wordId'):word['analysis']=self.get_corpus().morphology.analysis(word['wordId'])
+    source=next((line['text'] for line in lines if line['id']==ref['id']),'')
+    ref['ocrText']=source;ref['manuscriptWords']=[]
+    for token in re.finditer(r'\S+',source):
+     analyses=self.get_corpus().morphology.lookup(token[0])
+     ref['manuscriptWords'].append({'text':token[0],'analyses':analyses,'punctuation':not any(ch.isalpha() for ch in token[0])})
+    ref['english']=self.translations.span(self.get_corpus(),ref.get('referenceStart'),ref.get('referenceEnd'))
    result['excludedLines']=[{'id':l['id'],'text':l['text'],'reason':'Outside the two body columns; review separately'} for r in regions if r not in body for l in r['lines']]
    return result
   if cmd=='lookup':return self.get_corpus().lookup(arg['word'],arg.get('wordId'))
